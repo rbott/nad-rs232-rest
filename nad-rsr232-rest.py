@@ -31,6 +31,8 @@ config = {
 	"serialSpeed": 115200,
 	"mqttBroker": "192.168.128.2",
 	"mqttPort": 1883,
+	"restBindIp": "0.0.0.0",
+	"restBindPort": "3333",
 	"deviceType": "C368",
 	"deviceId": "LivingRoom"
 }
@@ -67,7 +69,6 @@ validMainCommands = [
 
 requestQueue = Queue.Queue()
 answerQueue = Queue.Queue()
-client = mqtt.Client()
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -89,10 +90,7 @@ def mqtt_on_message(client, userdata, msg):
 ##########
 # SERIAL #
 ##########
-def handleSerial(requestQueue, answerQueue):
-	global client
-	global config
-
+def handleSerial(config, mqttClient, requestQueue, answerQueue):
 	try:
 		ser = serial.Serial(port=config["serialPort"], baudrate=config["serialSpeed"], xonxoff=False, rtscts=False, dsrdtr=False, timeout=0.5)
 	except:
@@ -120,7 +118,7 @@ def handleSerial(requestQueue, answerQueue):
 				if(buffer):
 					logging.debug("[SERIAL] Found a message on the wire: " + buffer)
 					answerQueue.put(buffer)
-					client.publish("NAD/" + config["deviceType"] + "/" + config["deviceId"] + "/Messages", buffer)
+					mqttClient.publish("NAD/" + config["deviceType"] + "/" + config["deviceId"] + "/Messages", buffer)
 				buffer = ""
 			else:
 				buffer = buffer + readByte
@@ -197,6 +195,7 @@ def putMainCommand(command, value):
 def main(args):
 	logging.info("Starting mqtt thread")
 	try:
+		client = mqtt.Client()
 		client.on_connect = mqtt_on_connect
 		client.on_message = mqtt_on_message
 		client.connect(config["mqttBroker"], config["mqttPort"], 60)
@@ -207,12 +206,12 @@ def main(args):
 
 	logging.info("Starting serial port thread")
 	try:
-		thread.start_new_thread(handleSerial, (requestQueue, answerQueue))
+		thread.start_new_thread(handleSerial, (config, client, requestQueue, answerQueue))
 	except Exception as e:
 		logging.critical("Error spawning serial port thread: " + str(e))
 		sys.exit(1)
 
-	app.run(host='0.0.0.0', port=3333)
+	app.run(host=config["restBindIp"], port=config["restBindPort"])
 
 if __name__ == '__main__':
 	main(sys.argv[1:])	
