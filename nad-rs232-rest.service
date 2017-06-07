@@ -1,0 +1,9 @@
+[Unit]
+Description=NAD RS232 REST-API Service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python /usr/local/bin/nad-rs232-rest.py
+
+[Install]
+WantedBy=multi-user.target
