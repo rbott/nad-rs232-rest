@@ -25,3 +25,24 @@ The current state of this program is 'proof-of-concept', therefore it lacks many
 * you can not disable mqtt
 * no virtualenv
 
+# REST API Examples
+
+Query the current power state:
+```
+curl http://example.host:3333/nad/c368/v1.0/Main/Power
+{
+  "command": "main.power", 
+  "error": 0, 
+  "value": "on"
+}
+```
+
+Set the current power:
+```
+curl -X PUT http://example.host:3333/nad/c368/v1.0/Main/Power/on
+{
+  "command": "main.power", 
+  "error": 0, 
+  "value": "on"
+}
+```
