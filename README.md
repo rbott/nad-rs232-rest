@@ -13,6 +13,7 @@ This has been tested on the following setup:
 * Raspberry Pi 3, running Debian Jessie
 * Python 2.7 and python-pip from official packages
 * the following installed via pip: paho-mqtt, pyserial, flask
+* a PL2303-type USB2Serial Adapter
 
 # Known Limitations
 
