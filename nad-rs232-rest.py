@@ -64,10 +64,30 @@ validMainCommands = [
 	"volumedisplaymode",
 ]
 
+currentValues = {}
+
 requestQueue = Queue.Queue()
 answerQueue = Queue.Queue()
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+##########
+# Helper #
+##########
+
+def stripCommand(cmd):
+	m = re.search("([a-zA-Z0-9]+\.[a-zA-Z0-9\.]+)[?=].*", cmd)
+	if m:
+		return m.group(1)
+	else:
+		return ""
+	
+def stripValue(cmd):
+	m = re.search("[a-zA-Z0-9]+\.[a-zA-Z0-9\.]+[=](.*)", cmd)
+	if m:
+		return m.group(1)
+	else:
+		return ""
 
 ##########
 #  MQTT  #
@@ -87,7 +107,7 @@ def mqtt_on_message(client, userdata, msg):
 ##########
 # SERIAL #
 ##########
-def handleSerial(config, mqttClient, requestQueue, answerQueue):
+def handleSerial(config, mqttClient, requestQueue, answerQueue, currentValues):
 	try:
 		ser = serial.Serial(port=config["serialPort"], baudrate=config["serialSpeed"], xonxoff=False, rtscts=False, dsrdtr=False, timeout=0.5)
 	except:
@@ -114,6 +134,9 @@ def handleSerial(config, mqttClient, requestQueue, answerQueue):
 			if(ord(readByte) == 13):
 				if(buffer):
 					logging.debug("[SERIAL] Found a message on the wire: " + buffer)
+					command = stripCommand(buffer.lower())
+					if(command):
+						currentValues[command] = stripValue(buffer.lower())
 					answerQueue.put(buffer)
 					mqttClient.publish("NAD/" + config["deviceType"] + "/" + config["deviceId"] + "/Messages", buffer)
 				buffer = ""
@@ -125,25 +148,16 @@ def handleSerial(config, mqttClient, requestQueue, answerQueue):
 ############
 app = Flask(__name__)
 
-def stripCommand(cmd):
-	m = re.search("([a-zA-Z0-9]+\.[a-zA-Z0-9\.]+)[?=].*", cmd)
-	if m:
-		return m.group(1)
-	else:
-		return ""
-	
-def stripValue(cmd):
-	m = re.search("[a-zA-Z0-9]+\.[a-zA-Z0-9\.]+[=](.*)", cmd)
-	if m:
-		return m.group(1)
-	else:
-		return ""
-
 @app.route('/nad/c368/v1.0/Main/<command>', methods=['GET'])
 def getMainCommand(command):
 	command = command.lower()
 	if command not in validMainCommands:
 		answerStruct = { "error": 2, "command": "main." + command, "value": None, "errorMsg": "Command invalid" }
+		return jsonify(answerStruct)
+	nadCmd = "main." + command
+	if nadCmd in currentValues:
+		logging.info("Serving request from cache")
+		answerStruct = { "error": 0, "command": "main." + command, "value": currentValues[nadCmd] }
 		return jsonify(answerStruct)
 	# this is rather ugly, but...
 	# since we are expecting an answer to our query, let's make sure there
@@ -203,7 +217,7 @@ def main(args):
 
 	logging.info("Starting serial port thread")
 	try:
-		thread.start_new_thread(handleSerial, (config, client, requestQueue, answerQueue))
+		thread.start_new_thread(handleSerial, (config, client, requestQueue, answerQueue, currentValues))
 	except Exception as e:
 		logging.critical("Error spawning serial port thread: " + str(e))
 		sys.exit(1)
